@@ -1,46 +1,42 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './App.css';
 import Dashboard from './components/Dashboard';
 import Review from './components/Review';
 import SessionSummary from './components/SessionSummary';
 import Login from './components/Login';
+import Learn from './components/Learn';
 import { initialCards } from './data/cards';
-
-const hardcodedUsers = [
-  { username: 'admin', password: '1234' },
-  { username: 'test', password: 'test' }
-];
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './firebase';
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [userProgress, setUserProgress] = useState({});
+  const [sessionStats, setSessionStats] = useState([]);
+  const [lastSession, setLastSession] = useState(null);
 
-  const login = (username, password) => {
-    const found = hardcodedUsers.find(
-      (u) => u.username === username && u.password === password
-    );
-    if (found) {
-      if (!userProgress[username]) {
-        setUserProgress((prev) => ({ ...prev, [username]: initialCards }));
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        const uid = firebaseUser.uid;
+        setUser(uid);
+        if (!userProgress[uid]) {
+          setUserProgress((prev) => ({ ...prev, [uid]: initialCards }));
+        }
+      } else {
+        setUser(null);
       }
-      setUser(username);
-      return true;
-    }
-    return false;
-  };
+    });
+    return () => unsubscribe();
+  }, [userProgress]);
 
-  if (!user) {
-    return <Login login={login} />;
-  }
+  if (!user) return <Login />;
 
   const cards = userProgress[user] || [];
   const setCards = (newCards) => {
     setUserProgress((prev) => ({ ...prev, [user]: newCards }));
   };
-
-  const [sessionStats, setSessionStats] = useState([]);
-  const [lastSession, setLastSession] = useState(null);
 
   return (
     <Routes>
@@ -53,6 +49,15 @@ export default function App() {
             setCards={setCards}
             setLastSession={setLastSession}
             setSessionStats={setSessionStats}
+          />
+        }
+      />
+      <Route
+        path="/learn"
+        element={
+          <Learn
+            cards={cards}
+            setCards={setCards}
           />
         }
       />

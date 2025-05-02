@@ -1,186 +1,245 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { normalize, levenshtein, updateCard } from '../utils/helpers';
+import { motion, AnimatePresence } from 'framer-motion';
+
 
 export default function Review({ cards, setCards, setLastSession, setSessionStats }) {
   const navigate = useNavigate();
+  const now = Date.now();
+
+  const originalReviewCards = useMemo(() => cards.filter(c => c.learned && c.nextReview <= now), [cards]);
+  const [queue, setQueue] = useState(originalReviewCards);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [input, setInput] = useState('');
-  const [showAnswer, setShowAnswer] = useState(false);
-  const [feedback, setFeedback] = useState('');
-  const [reviewAgainQueue, setReviewAgainQueue] = useState([]);
-  const [reviewed, setReviewed] = useState([]);
+  const [feedback, setFeedback] = useState(null);
+  const [session, setSession] = useState({ correct: 0, total: 0 });
+  const [showResult, setShowResult] = useState(false);
+  const [isCorrect, setIsCorrect] = useState(false);
+  const [reviewedMap, setReviewedMap] = useState({});
 
-  const initialQueue = cards.filter(card => card.nextReview <= Date.now());
-  const [sessionQueue, setSessionQueue] = useState(initialQueue);
-  const [currentCard, setCurrentCard] = useState(initialQueue[0] || null);
-
-  const totalToReview = initialQueue.length;
+  const current = queue[currentIndex];
+  const [totalCards] = useState(originalReviewCards.length);
+  const inputRef = useRef(null);
 
   useEffect(() => {
-    if (!currentCard) {
-      if (sessionQueue.length > 0) {
-        setCurrentCard(sessionQueue[0]);
-        setSessionQueue(prev => prev.slice(1));
-      } else if (reviewAgainQueue.length > 0) {
-        setCurrentCard(reviewAgainQueue[0]);
-        setReviewAgainQueue(prev => prev.slice(1));
+    if (!showResult && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [showResult]);
+
+  useEffect(() => {
+    if (currentIndex >= queue.length && session.total >= totalCards) {  
+      const timestamp = Date.now();
+      const accuracy = Math.round((session.correct / session.total) * 100);
+      const summary = {
+        timestamp,
+        total: session.total,
+        correct: session.correct,
+        accuracy
+      };
+      setLastSession(summary);
+      setSessionStats((prev) => [summary, ...prev]);
+      navigate('/summary');
+    }
+  }, [currentIndex, queue.length, session, navigate, setLastSession, setSessionStats]);
+
+  useEffect(() => {
+    document.querySelector('.App')?.focus();
+  }, []);  
+
+  const normalize = (text) => text.toLowerCase().replace(/[.,!?']/g, '').trim();
+
+  const handleSubmit = () => {
+    const correct = normalize(input) === normalize(current.back);
+    setIsCorrect(correct);
+    setShowResult(true);
+    setFeedback(correct ? '✅ Correct!' : `❌ Incorrect. Answer: ${current.back}`);
+
+    const updatedCards = cards.map((card) => {
+      if (card.id === current.id && correct) {
+        const newEF = Math.max(1.3, card.easeFactor + 0.1);
+        const newInterval = Math.round((card.interval || 1) * newEF);
+        return {
+          ...card,
+          easeFactor: newEF,
+          interval: newInterval,
+          repetitions: card.repetitions + 1,
+          nextReview: Date.now() + newInterval * 24 * 60 * 60 * 1000
+        };
       }
-    }
-  }, [currentCard, sessionQueue, reviewAgainQueue]);
+      return card;
+    });    
 
-  const totalReviewed = reviewed.length;
-  const percentComplete = Math.round((totalReviewed / totalToReview) * 100);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!currentCard) return;
-
-    const userAnswer = normalize(input);
-    const correctAnswer = normalize(currentCard.back);
-    const distance = levenshtein(userAnswer, correctAnswer);
-
-    let score = 0;
-    const correct = userAnswer === correctAnswer || distance <= 2;
-    if (correct) {
-      score = 5;
-      setFeedback('✅ Perfect!');
-    } else {
-      score = 1;
-      setFeedback(`❌ Wrong. Correct: "${currentCard.back}"`);
-      setReviewAgainQueue((prev) => [...prev, currentCard]);
-    }
-
-    const updatedCard = updateCard(currentCard, score);
-    const updatedCards = cards.map(c => c.id === currentCard.id ? updatedCard : c);
     setCards(updatedCards);
 
-    if (correct) {
-      setReviewed(prev => [...prev, {
-        id: currentCard.id,
-        front: currentCard.front,
-        correct: true,
-        userAnswer,
-        correctAnswer: currentCard.back
-      }]);
-    }
+    setReviewedMap((prev) => {
+      const alreadyReviewed = prev[current.id];
+      const wasWrongBefore = alreadyReviewed === false;
 
-    setInput('');
-    setShowAnswer(true);
-
-    setTimeout(() => {
-      setShowAnswer(false);
-      setFeedback('');
-
-      if (sessionQueue.length > 0) {
-        setCurrentCard(sessionQueue[0]);
-        setSessionQueue(prev => prev.slice(1));
-      } else if (reviewAgainQueue.length > 0) {
-        setCurrentCard(reviewAgainQueue[0]);
-        setReviewAgainQueue(prev => prev.slice(1));
-      } else {
-        const total = reviewed.length;
-        const correctCount = reviewed.filter(r => r.correct).length;
-
-        const wrongCards = reviewed.filter(r => !r.correct);
-
-        const summary = {
-          timestamp: new Date(),
-          total,
-          correct: correctCount,
-          accuracy: total > 0 ? Math.round((correctCount / total) * 100) : 0,
-          wrongCards
-        };
-
-        setLastSession(summary);
-        setSessionStats(prev => [summary, ...prev]);
-        navigate('/summary');
+      if (correct && !alreadyReviewed) {
+        setSession((s) => ({
+          correct: s.correct + 1,
+          total: s.total + 1
+        }));
       }
-    }, 1500);
+
+      if (!correct && alreadyReviewed === undefined) {
+        setSession((s) => ({
+          ...s,
+          total: s.total + 0
+        }));
+      }
+
+      return {
+        ...prev,
+        [current.id]: wasWrongBefore ? false : correct
+      };
+    });
+
+    if (!correct) {
+      setQueue((prev) => [...prev, current]);
+    }
   };
 
-  if (!currentCard) {
+  const handleNext = () => {
+    setShowResult(false);
+    setInput('');
+    setCurrentIndex((prev) => prev + 1);
+    
+    setTimeout(() => {
+      document.querySelector('.App')?.focus();
+    }, 0);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (showResult) {
+        handleNext();
+      } else {
+        handleSubmit();
+      }
+    }
+  };
+
+  if (!current) {
     return (
-      <div className="App">
-        <h1>🎉 All reviews complete!</h1>
-        <button onClick={() => navigate('/')}>Go to Dashboard</button>
+      <div className="App" style={{ marginTop: '4rem' }}>
+        <h2>No cards due for review right now.</h2>
+        <button onClick={() => navigate('/')}>Back to Dashboard</button>
       </div>
     );
   }
 
+  const background = showResult ? (isCorrect ? '#d1fae5' : '#fee2e2') : 'white';
+
   return (
-    <div className="App" style={{ maxWidth: '600px', margin: '2rem auto', padding: '1rem' }}>
-      <h1 style={{ color: '#1d4ed8', marginBottom: '1rem' }}>Review Time</h1>
-
-      <div style={{ marginBottom: '1rem' }}>
-        <div style={{ height: '20px', backgroundColor: '#e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
-          <div
-            style={{
-              width: `${percentComplete}%`,
-              backgroundColor: '#3b82f6',
-              height: '100%',
-              transition: 'width 0.3s ease'
-            }}
-          ></div>
-        </div>
-        <p style={{ marginTop: '0.5rem' }}>
-          {totalReviewed}/{totalToReview} cards reviewed
-        </p>
+    <div
+      className="App"
+      onKeyDown={handleKeyDown}
+      tabIndex={0}
+      style={{
+        marginTop: '2rem',
+        backgroundColor: background,
+        transition: 'background-color 0.3s ease'
+      }}
+    >
+      <h1 style={{ color: '#1d4ed8' }}>Review Time</h1>
+      <div style={{ margin: '1rem auto', width: '80%', maxWidth: '400px', backgroundColor: '#e5e7eb', borderRadius: '10px', height: '12px' }}>
+        <div style={{
+          width: `${(session.correct / totalCards) * 100}%`,
+          backgroundColor: '#3b82f6',
+          height: '100%',
+          borderRadius: '10px'
+        }}></div>
       </div>
-
-      <div className="flashcard" style={{
-        backgroundColor: '#fff',
-        borderRadius: '12px',
-        padding: '2rem',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-        marginBottom: '1.5rem',
-        fontSize: '1.75rem',
-        fontWeight: 'bold'
-      }}>
-        {currentCard.front}
-      </div>
-
-      <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          placeholder="Type the English meaning..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          disabled={showAnswer}
-          style={{
-            padding: '0.75rem 1rem',
-            fontSize: '1rem',
-            borderRadius: '8px',
-            border: '2px solid #cbd5e1',
-            width: '100%',
-            marginBottom: '0.75rem'
-          }}
-        />
-        <button
-          type="submit"
-          disabled={showAnswer}
-          style={{
-            padding: '0.75rem 1.5rem',
-            backgroundColor: '#2563eb',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '1rem',
-            cursor: 'pointer'
-          }}
+      <p>{session.total} / {totalCards} cards reviewed</p>
+  
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={currentIndex}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.3 }}
+          style={{ fontSize: '2rem', margin: '2rem' }}
         >
-          Submit
-        </button>
-      </form>
-
-      {showAnswer && (
-        <p className="feedback" style={{ marginTop: '1rem', fontSize: '1.1rem' }}>
-          {feedback}
-        </p>
+          {current.front}
+        </motion.div>
+      </AnimatePresence>
+  
+      {showResult ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.4 }}
+        >
+          <div style={{ fontSize: '1.2rem' }}>{feedback}</div>
+          <button
+            onClick={handleNext}
+            style={{
+              marginTop: '1rem',
+              padding: '0.5rem 1rem',
+              fontSize: '1rem',
+              backgroundColor: isCorrect ? '#10b981' : '#ef4444',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px'
+            }}
+          >
+            Next
+          </button>
+        </motion.div>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Type the English meaning..."
+            style={{
+              padding: '0.5rem 1rem',
+              fontSize: '1rem',
+              width: '300px',
+              marginBottom: '1rem'
+            }}
+          />
+          <br />
+          <button
+            onClick={handleSubmit}
+            style={{
+              padding: '0.5rem 1rem',
+              fontSize: '1rem',
+              backgroundColor: '#2563eb',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px'
+            }}
+          >
+            Submit
+          </button>
+        </motion.div>
       )}
-
-      <button onClick={() => navigate('/')} style={{ marginTop: '1.5rem' }}>
-        ⬅ Back to Dashboard
+  
+      <div style={{ marginTop: '1rem', minHeight: '2rem' }}></div>
+      <button
+        onClick={() => navigate('/')}
+        style={{
+          marginTop: '2rem',
+          backgroundColor: '#111827',
+          color: 'white',
+          padding: '0.5rem 1rem',
+          borderRadius: '6px'
+        }}
+      >
+        ← Back to Dashboard
       </button>
     </div>
-  );
+  );  
 }
