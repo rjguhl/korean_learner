@@ -1,0 +1,22 @@
+export const initialCards = [
+    { id: 1, front: '안녕하세요', back: 'hello', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 2, front: '감사합니다', back: 'thank you', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 3, front: '사랑해요', back: 'i love you', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 4, front: '잘 지내세요?', back: 'how are you?', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 5, front: '죄송합니다', back: 'sorry', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 6, front: '괜찮아요', back: 'it’s okay', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 7, front: '이름이 뭐예요?', back: 'what is your name?', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 8, front: '천만에요', back: 'you’re welcome', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 9, front: '알겠습니다', back: 'understood', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 10, front: '좋은 하루 되세요', back: 'have a nice day', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 11, front: '배고파요', back: 'i’m hungry', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 12, front: '맛있어요', back: 'it’s delicious', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 13, front: '화장실 어디예요?', back: 'where is the bathroom?', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 14, front: '얼마예요?', back: 'how much is it?', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 15, front: '도와주세요', back: 'please help me', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 16, front: '괜찮습니다', back: 'it’s fine', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 17, front: '지금 몇 시예요?', back: 'what time is it?', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 18, front: '잘 자요', back: 'sleep well', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 19, front: '안녕히 계세요', back: 'goodbye (you stay)', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() },
+    { id: 20, front: '안녕히 가세요', back: 'goodbye (you go)', repetitions: 0, interval: 0, easeFactor: 2.5, nextReview: Date.now() }
+  ];
