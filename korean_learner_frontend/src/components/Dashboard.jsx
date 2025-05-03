@@ -10,8 +10,7 @@ export default function Dashboard({ cards, sessionStats }) {
 
   const userEmail = auth.currentUser?.email;
 
-  const reviewableCards = cards.filter((c) => c.learned && c.nextReview <= now);
-  const dueToday = reviewableCards.length;
+  const dueToday = cards.filter((c) => c.learned && c.nextReview <= now).length;
   const toLearn = cards.filter((c) => !c.learned).length;
 
   const totalCards = cards.length;
@@ -42,8 +41,14 @@ export default function Dashboard({ cards, sessionStats }) {
   };
 
   const handleReviewClick = () => {
-    navigate('/review'); // Always allow navigation
+    const reviewable = cards.filter((c) => c.learned && c.nextReview <= now);
+    if (reviewable.length > 0) navigate('/review');
   };
+
+  const recentMistakes = cards
+    .filter(c => c.lastIncorrect && Date.now() - c.lastIncorrect < 7 * msInDay)
+    .sort((a, b) => b.lastIncorrect - a.lastIncorrect)
+    .slice(0, 5);
 
   return (
     <div className="App" style={{ maxWidth: '1200px', margin: '2rem auto', padding: '2rem', display: 'flex', gap: '2rem' }}>
@@ -98,6 +103,19 @@ export default function Dashboard({ cards, sessionStats }) {
               ? '🔥 Keep it up! You’re making progress.'
               : '🚀 Let’s get started!'}
           </h3>
+
+          {recentMistakes.length > 0 && (
+            <div style={{ marginTop: '1rem' }}>
+              <h4 style={{ marginBottom: '0.5rem' }}>🛑 Recent Mistakes</h4>
+              <ul style={{ listStyle: 'none', padding: 0 }}>
+                {recentMistakes.map((card) => (
+                  <li key={card.id} style={{ marginBottom: '0.25rem', color: '#ef4444' }}>
+                    <strong>{card.front}</strong> – {card.back}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         {sessionStats.length > 0 && (

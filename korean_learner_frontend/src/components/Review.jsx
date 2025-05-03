@@ -16,6 +16,7 @@ export default function Review({ cards, setCards, setLastSession, setSessionStat
   const [showResult, setShowResult] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
   const [reviewedMap, setReviewedMap] = useState({});
+  const [wrongCards, setWrongCards] = useState([]);
 
   const current = queue[currentIndex];
   const [totalCards] = useState(originalReviewCards.length);
@@ -35,8 +36,9 @@ export default function Review({ cards, setCards, setLastSession, setSessionStat
         timestamp,
         total: session.total,
         correct: session.correct,
-        accuracy
-      };
+        accuracy,
+        wrongCards
+      };      
       setLastSession(summary);
       setSessionStats((prev) => [summary, ...prev]);
       navigate('/summary');
@@ -68,33 +70,39 @@ export default function Review({ cards, setCards, setLastSession, setSessionStat
         };
       }
       return card;
-    });    
+    });
 
     setCards(updatedCards);
 
     setReviewedMap((prev) => {
       const alreadyReviewed = prev[current.id];
-      const wasWrongBefore = alreadyReviewed === false;
-
-      if (correct && !alreadyReviewed) {
+    
+      if (alreadyReviewed === undefined) {
         setSession((s) => ({
-          correct: s.correct + 1,
+          correct: correct ? s.correct + 1 : s.correct,
           total: s.total + 1
         }));
+    
+        if (!correct) {
+          const alreadyInWrongList = wrongCards.some(w => w.front === current.front);
+          if (!alreadyInWrongList) {
+            setWrongCards((prevWrong) => [
+              ...prevWrong,
+              {
+                front: current.front,
+                correctAnswer: current.back,
+                userAnswer: input
+              }
+            ]);
+          }
+        }
       }
-
-      if (!correct && alreadyReviewed === undefined) {
-        setSession((s) => ({
-          ...s,
-          total: s.total + 0
-        }));
-      }
-
+    
       return {
         ...prev,
-        [current.id]: wasWrongBefore ? false : correct
+        [current.id]: correct
       };
-    });
+    });    
 
     if (!correct) {
       setQueue((prev) => [...prev, current]);
