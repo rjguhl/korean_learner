@@ -2,11 +2,13 @@ import { useNavigate } from 'react-router-dom';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
+import { useState } from 'react';
 
 export default function Dashboard({ cards, sessionStats }) {
   const navigate = useNavigate();
   const now = Date.now();
   const msInDay = 24 * 60 * 60 * 1000;
+  const [dayOffset, setDayOffset] = useState(0);
 
   const userEmail = auth.currentUser?.email;
 
@@ -19,17 +21,37 @@ export default function Dashboard({ cards, sessionStats }) {
     cards.reduce((sum, c) => sum + c.easeFactor, 0) / totalCards
   ).toFixed(2);
 
-  const forecastData = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date(now + i * msInDay);
+  const selectedDay = new Date(now + dayOffset * msInDay);
+  selectedDay.setHours(0, 0, 0, 0);
+
+  const intervalSize = 3;
+  const hourlyGroups = Array.from({ length: 24 / intervalSize }, (_, i) => {
+    const startHour = i * intervalSize;
+    const endHour = startHour + intervalSize;
+
+    const start = new Date(selectedDay);
+    start.setHours(startHour, 0, 0, 0);
+    const end = new Date(start);
+    end.setHours(endHour, 0, 0, 0);
+
     const count = cards.filter(card =>
-      card.learned && Math.floor((card.nextReview - now) / msInDay) === i
+      card.learned &&
+      card.nextReview >= start.getTime() &&
+      card.nextReview < end.getTime()
     ).length;
 
     return {
-      day: date.toLocaleDateString('en-US', { weekday: 'short' }),
-      reviews: count
+      startHour,
+      count,
+      label: `${formatHour(startHour)}`
     };
   });
+
+  function formatHour(hour) {
+    const suffix = hour >= 12 ? 'PM' : 'AM';
+    const adjusted = hour % 12 === 0 ? 12 : hour % 12;
+    return `${adjusted}:00 ${suffix}`;
+  }
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -150,16 +172,61 @@ export default function Dashboard({ cards, sessionStats }) {
         </div>
 
         <div style={{ background: '#f3f4f6', padding: '1rem', borderRadius: '10px' }}>
-          <h2 style={{ textAlign: 'center' }}>📅 7-Day Forecast</h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={forecastData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="day" />
-              <YAxis allowDecimals={false} />
-              <Tooltip />
-              <Bar dataKey="reviews" fill="#3b82f6" />
-            </BarChart>
-          </ResponsiveContainer>
+          <h2 style={{ textAlign: 'center', marginBottom: '1rem' }}>📅 Review Forecast</h2>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+            <button
+              onClick={() => { if (dayOffset > 0) setDayOffset(d => d - 1); }}
+              style={{
+                backgroundColor: dayOffset === 0 ? '#d1d5db' : '#e5e7eb',
+                border: 'none',
+                padding: '0.5rem 1rem',
+                borderRadius: '6px',
+                color: '#374151',
+                cursor: dayOffset === 0 ? 'not-allowed' : 'pointer'
+              }}
+            >
+              ←
+            </button>
+            <h3 style={{ margin: 0 }}>{dayOffset === 0 ? 'Today' : selectedDay.toLocaleDateString()}</h3>
+            <button
+              onClick={() => setDayOffset(d => d + 1)}
+              style={{
+                backgroundColor: '#e5e7eb',
+                border: 'none',
+                padding: '0.5rem 1rem',
+                borderRadius: '6px',
+                color: '#374151',
+                cursor: 'pointer'
+              }}
+            >
+              →
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'row' }}>
+            {/* Time Labels */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.75rem', color: '#6b7280', marginRight: '0.5rem' }}>
+              {hourlyGroups.map((g, i) => (
+                <div key={i} style={{ height: '24px' }}>{g.label}</div>
+              ))}
+            </div>
+
+            {/* Review Blocks */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexGrow: 1 }}>
+              {hourlyGroups.map((g, i) => (
+                <div
+                  key={i}
+                  title={`${g.count} review${g.count !== 1 ? 's' : ''} at ${g.label}`}
+                  style={{
+                    height: '24px',
+                    backgroundColor: g.count > 0 ? '#3b82f6' : '#e5e7eb',
+                    borderRadius: '4px'
+                  }}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
