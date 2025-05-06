@@ -36,9 +36,10 @@ export default function Dashboard({ cards, sessionStats }) {
 
     const count = cards.filter(card =>
       card.learned &&
+      card.nextReview > now &&
       card.nextReview >= start.getTime() &&
       card.nextReview < end.getTime()
-    ).length;
+    ).length;    
 
     return {
       startHour,
@@ -217,11 +218,12 @@ export default function Dashboard({ cards, sessionStats }) {
               {hourlyGroups.map((g, i) => (
                 <div
                   key={i}
-                  title={`${g.count} review${g.count !== 1 ? 's' : ''} at ${g.label}`}
+                  title={`${g.count} review${g.count !== 1 ? 's' : ''} from ${g.label} to ${formatHour(g.startHour + intervalSize)}`}
                   style={{
                     height: '24px',
                     backgroundColor: g.count > 0 ? '#3b82f6' : '#e5e7eb',
-                    borderRadius: '4px'
+                    borderRadius: '4px',
+                    cursor: g.count > 0 ? 'pointer' : 'default'
                   }}
                 />
               ))}

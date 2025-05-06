@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
-
 export default function Review({ cards, setCards, setLastSession, setSessionStats }) {
   const navigate = useNavigate();
   const now = Date.now();
@@ -21,6 +20,7 @@ export default function Review({ cards, setCards, setLastSession, setSessionStat
   const current = queue[currentIndex];
   const [totalCards] = useState(originalReviewCards.length);
   const inputRef = useRef(null);
+  const hasSubmittedRef = useRef(false);
 
   useEffect(() => {
     if (!showResult && inputRef.current) {
@@ -30,15 +30,17 @@ export default function Review({ cards, setCards, setLastSession, setSessionStat
 
   useEffect(() => {
     if (currentIndex >= queue.length && session.total >= totalCards) {  
-      const timestamp = Date.now();
-      const accuracy = Math.round((session.correct / session.total) * 100);
+      const timestamp = Date.now();     
+      const wrongCardIds = new Set(wrongCards.map(w => w.id));
+      const adjustedCorrect = totalCards - wrongCardIds.size;
+      const accuracy = Math.round((adjustedCorrect / totalCards) * 100);
       const summary = {
         timestamp,
-        total: session.total,
-        correct: session.correct,
+        total: totalCards,
+        correct: adjustedCorrect,
         accuracy,
         wrongCards
-      };      
+      };
       setLastSession(summary);
       setSessionStats((prev) => [summary, ...prev]);
       navigate('/summary');
@@ -52,72 +54,60 @@ export default function Review({ cards, setCards, setLastSession, setSessionStat
   const normalize = (text) => text.toLowerCase().replace(/[.,!?']/g, '').trim();
 
   const handleSubmit = () => {
+    if (hasSubmittedRef.current) return;
+    hasSubmittedRef.current = true;
+
+    if (showResult) return;
+  
     const correct = normalize(input) === normalize(current.back);
     setIsCorrect(correct);
     setShowResult(true);
     setFeedback(correct ? '✅ Correct!' : `❌ Incorrect. Answer: ${current.back}`);
-
-    const updatedCards = cards.map((card) => {
-      if (card.id === current.id && correct) {
-        const newEF = Math.max(1.3, card.easeFactor + 0.1);
-        const newInterval = Math.round((card.interval || 1) * newEF);
-        return {
-          ...card,
-          easeFactor: newEF,
-          interval: newInterval,
-          repetitions: card.repetitions + 1,
-          nextReview: Date.now() + newInterval * 24 * 60 * 60 * 1000
-        };
-      }
-      return card;
-    });
-
-    setCards(updatedCards);
-
-    setReviewedMap((prev) => {
-      const alreadyReviewed = prev[current.id];
-    
-      if (alreadyReviewed === undefined) {
-        setSession((s) => ({
-          correct: correct ? s.correct + 1 : s.correct,
-          total: s.total + 1
-        }));
-    
-        if (!correct) {
-          const alreadyInWrongList = wrongCards.some(w => w.front === current.front);
-          if (!alreadyInWrongList) {
-            setWrongCards((prevWrong) => [
-              ...prevWrong,
-              {
-                front: current.front,
-                correctAnswer: current.back,
-                userAnswer: input
-              }
-            ]);
-          }
-        }
-      }
-    
-      return {
-        ...prev,
-        [current.id]: correct
-      };
-    });    
-
-    if (!correct) {
-      setQueue((prev) => [...prev, current]);
+  
+    setSession(s => ({
+      correct: s.correct + (!reviewedMap[current.id] && correct ? 1 : 0),
+      total: s.total + (reviewedMap[current.id] === undefined ? 1 : 0)
+    }));    
+  
+    if (!correct && reviewedMap[current.id] === undefined) {
+      setWrongCards(w => [...w, {
+        id: current.id,
+        front: current.front,
+        correctAnswer: current.back,
+        userAnswer: input
+      }]);
     }
-  };
+  
+    if (correct) {
+      setCards(cards.map(card =>
+        card.id === current.id
+          ? {
+              ...card,
+              easeFactor: Math.max(1.3, card.easeFactor + 0.1),
+              interval: Math.round((card.interval || 1) * Math.max(1.3, card.easeFactor + 0.1)),
+              repetitions: card.repetitions + 1,
+              nextReview: Date.now() + Math.round((card.interval || 1) * Math.max(1.3, card.easeFactor + 0.1)) * 86400000
+            }
+          : card
+      ));
+    } else {
+      if (!queue.slice(currentIndex + 1).some(q => q.id === current.id)) {
+        setQueue(prev => [...prev, current]);
+      }
+    }
+  
+    setReviewedMap(prev => ({ ...prev, [current.id]: correct }));
+  };  
 
   const handleNext = () => {
+    hasSubmittedRef.current = false;
     setShowResult(false);
     setInput('');
     setCurrentIndex((prev) => prev + 1);
-    
     setTimeout(() => {
       document.querySelector('.App')?.focus();
     }, 0);
-  };
+  };  
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -161,7 +151,7 @@ export default function Review({ cards, setCards, setLastSession, setSessionStat
           borderRadius: '10px'
         }}></div>
       </div>
-      <p>{session.total} / {totalCards} cards reviewed</p>
+      <p>{session.correct} / {totalCards} cards reviewed</p>
   
       <AnimatePresence mode="wait">
         <motion.div
@@ -220,7 +210,11 @@ export default function Review({ cards, setCards, setLastSession, setSessionStat
           />
           <br />
           <button
-            onClick={handleSubmit}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              handleSubmit();
+            }}
             style={{
               padding: '0.5rem 1rem',
               fontSize: '1rem',

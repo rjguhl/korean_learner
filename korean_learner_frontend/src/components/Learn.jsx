@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 export default function Learn({ cards, setCards }) {
   const navigate = useNavigate();
-  const newCards = cards.filter((c) => !c.learned).slice(0, 10);
+  const newCards = cards.filter((c) => !c.learned).slice(0, 5);
   const [index, setIndex] = useState(0);
   const [showBack, setShowBack] = useState(false);
 
